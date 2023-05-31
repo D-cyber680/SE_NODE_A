@@ -20,14 +20,11 @@
 #include "nvs_flash.h"
 #include "packagedata.h"
 #include "crc32.h"
+#include "dht11.h"
 // #include "mpu6050/mpu6050.h"
 
 static const char *TAG = "NODE A: ";
-float self_test[6] = {0, 0, 0, 0, 0, 0};
-float accel_bias[3] = {0, 0, 0};
-float gyro_bias[3] = {0, 0, 0};
 
-#define PI 3.14159265358979323846f
 #define AVG_BUFF_SIZE 20
 #define I2C_MASTER_SCL_IO 22        /*!< GPIO number used for I2C master clock */
 #define I2C_MASTER_SDA_IO 21        /*!< GPIO number used for I2C master data  */
@@ -47,6 +44,7 @@ float gyro_bias[3] = {0, 0, 0};
 #define CMD_SHOWTEMP_A 0xEE
 #define CMD_SHOWTEMP_B 0xEE
 
+int dato = 0;
 static uint8_t peer_mac[ESP_NOW_ETH_ALEN] = {0x40, 0x91, 0x51, 0xbf, 0xf5, 0x94}; // estacion AP R (40:91:51:bf:f5:94)
                                                                                   //  STA  I (40:22:d8:ee:6d:a4)
 static esp_err_t init_wifi(void)
@@ -111,10 +109,23 @@ static esp_err_t esp_now_send_data(const uint8_t *peer_addr, const uint8_t *data
     return ESP_OK;
 }
 
+void dht11_task(void *pvParameters)
+{
+
+    while (1)
+    {
+        dato = getTemp();
+        ESP_LOGI(TAG, "temperatura A es: %d\n", dato);
+        vTaskDelay(pdMS_TO_TICKS(3000)); // Espera 2 segundos antes de leer los valores nuevamente
+    }
+}
+
 void app_main(void)
 {
-    uint8_t dato = 0;
+
     char msg_pack[MSG_TAM_STR];
+    gpio_reset_pin(4);
+    gpio_set_direction(4, GPIO_MODE_INPUT);
 
     ESP_ERROR_CHECK(init_wifi());
     ESP_ERROR_CHECK(init_esp_now());
@@ -122,10 +133,11 @@ void app_main(void)
 
     // Creo el apuntador a un paquete vacio
     NODE_Package *pkg = (NODE_Package *)malloc(sizeof(NODE_Package));
+    setDHTPin(4);
 
+    xTaskCreate(dht11_task, "dht11_task", configMINIMAL_STACK_SIZE * 3, NULL, 5, NULL);
     while (true)
     {
-        dato = 32;
         // Creo el paquete con contenido
         createPackage(pkg, HEADER_NODE_A, CMD_SHOWTEMP_A, 2, 0, 0, 0, dato, END_NODE_A);
         // Convierto El paquete a Cadena
@@ -134,8 +146,7 @@ void app_main(void)
         // const uint8_t *message = (const uint8_t *)msg_pack;
         // Enviamos
         esp_now_send_data(peer_mac, (const uint8_t *)msg_pack, 24);
-        //showPackage(pkg);
+        // showPackage(pkg);
         vTaskDelay(pdMS_TO_TICKS(3500));
     }
-
 }
