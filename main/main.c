@@ -147,6 +147,6 @@ void app_main(void)
         // Enviamos
         esp_now_send_data(peer_mac, (const uint8_t *)msg_pack, 24);
         // showPackage(pkg);
-        vTaskDelay(pdMS_TO_TICKS(3500));
+        vTaskDelay(pdMS_TO_TICKS(3000));
     }
 }
